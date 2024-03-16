@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 
 import sys
-import logging
 
-logging.basicConfig(filename='src/log/mapreduce.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def reducer():
+def combiner():
     current_passenger = None
     flight_count = 0
 
@@ -21,13 +18,10 @@ def reducer():
                 current_passenger = passenger_id
                 flight_count = int(count)
         except (ValueError, IndexError):
-            logging.error(f"Invalid input line: {line}")
+            continue
 
     if current_passenger:
         print(f"{current_passenger}\t{flight_count}")
 
 if __name__ == "__main__":
-    try:
-        reducer()
-    except Exception as e:
-        logging.error(f"Reducer error: {str(e)}")
+    combiner()
