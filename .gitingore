@@ -6,3 +6,6 @@ output/
 
 # VSCode files
 .vscode/
+
+# Log files
+.log
