@@ -7,9 +7,8 @@ logging.basicConfig(filename='src/log/mapreduce.log', level=logging.INFO, format
 
 def mapper():
     for line in sys.stdin:
-        line = line.strip()
         try:
-            passenger_id = line.split(',')[0]
+            passenger_id = line.strip().split(',')[0]
             print(f"{passenger_id}\t1")
         except IndexError:
             logging.error(f"Invalid input line: {line}")
