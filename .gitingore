@@ -1,0 +1,8 @@
+# Data files
+data/
+
+# Output files
+output/
+
+# VSCode files
+.vscode/
