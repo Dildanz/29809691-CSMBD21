@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 
-import sys
-
-def combiner():
+def combiner(input_data):
+    output = []
     current_passenger = None
     flight_count = 0
 
-    for line in sys.stdin:
+    for line in input_data:
         line = line.strip()
         try:
             passenger_id, count = line.split('\t', 1)
@@ -14,14 +13,13 @@ def combiner():
                 flight_count += int(count)
             else:
                 if current_passenger:
-                    print(f"{current_passenger}\t{flight_count}")
+                    output.append(f"{current_passenger}\t{flight_count}")
                 current_passenger = passenger_id
                 flight_count = int(count)
         except (ValueError, IndexError):
             continue
 
     if current_passenger:
-        print(f"{current_passenger}\t{flight_count}")
+        output.append(f"{current_passenger}\t{flight_count}")
 
-if __name__ == "__main__":
-    combiner()
+    return output
