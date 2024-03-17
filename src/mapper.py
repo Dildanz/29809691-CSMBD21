@@ -14,7 +14,7 @@ def mapper_worker(input_queue, output_queue):
         try:
             passenger_id = line.strip().split(',')[0]
             output_queue.put(f"{passenger_id}\t1")
-            print(f"Mapper: Processed passenger {passenger_id}")
+            logging.info(f"Mapper: Processed passenger {passenger_id}")
         except IndexError:
             logging.error(f"Invalid input line: {line}")
 
@@ -28,13 +28,15 @@ def mapper():
         worker = Process(target=mapper_worker, args=(input_queue, output_queue))
         worker.start()
         workers.append(worker)
-        print(f"Mapper: Started worker {i+1}")
+        logging.info(f"Mapper: Started worker {i+1}")
 
     line_count = 0
     for line in sys.stdin:
         input_queue.put(line)
         line_count += 1
-    print(f"Mapper: Read {line_count} lines from input")
+        if line_count % 1000 == 0:
+            logging.info(f"Mapper: Processed {line_count} lines")
+    logging.info(f"Mapper: Read {line_count} lines from input")
 
     for _ in range(num_workers):
         input_queue.put(None)
@@ -42,10 +44,13 @@ def mapper():
     for worker in workers:
         worker.join()
 
-    print("Mapper: All workers completed")
+    logging.info("Mapper: All workers completed")
 
+    output_count = 0
     while not output_queue.empty():
         print(output_queue.get())
+        output_count += 1
+    logging.info(f"Mapper: Produced {output_count} output pairs")
 
 if __name__ == "__main__":
     try:
