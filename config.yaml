@@ -1,0 +1,3 @@
+input_file: data/passenger_main.csv
+output_file: output/passenger_flights.txt
+num_reducers: 4
