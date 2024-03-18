@@ -6,3 +6,9 @@ output/
 
 # VSCode files
 .vscode/
+
+# Log files
+.log
+
+# Pycache files
+.pyc
