@@ -1,3 +1,12 @@
+import logging
+import threading
+from mapper import mapper
+from combiner import combiner
+from reducer import reducer
+from partitioner import partitioner
+
+logging.basicConfig(filename='src/log/mapreduce.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 class MapReduceJob:
     """
     MapReduce job for analysing passenger flight data files
@@ -6,9 +15,11 @@ class MapReduceJob:
         config (dict) - A dictionary containing job configuration
         passenger_flight_counts(dict) - Dictionary to store intermediate data produced by mapper
         output_data (list) - List to store the final output
+        airport_codes (set) - Set to store valid airport codes
 
         Class Methods:
         run(): Execute job
+        _load_airport_codes(): Load valid airport codes
         _map(): Perform map phase
         _mapper_worker(line): Worker function for mapper threads
         _combine(): Perform combine phase
@@ -28,6 +39,7 @@ class MapReduceJob:
         self.config = config
         self.passenger_flight_counts= {}
         self.output_data = []
+        self.airport_codes = self._load_airport_codes()
 
     def run(self):
         """
@@ -37,6 +49,20 @@ class MapReduceJob:
         self._combine()
         self._reduce()
         self._write_output()
+
+    def _load_airport_codes(self):
+        """
+        Load the valid airport codes from the airport dataset
+        """
+        airport_codes = set()
+        with open(self.config['airport_file'], 'r') as file:
+            for line in file:
+                try:
+                    airport_code = line.strip().split(',')[1]
+                    airport_codes.add(airport_code)
+                except IndexError:
+                    logging.warning(f"Invalid airport data format: {line.strip()}")
+        return airport_codes
 
     def _map(self):
         """
@@ -48,13 +74,13 @@ class MapReduceJob:
 
             # Creates threads for each line in the passenger data
             for line in input_file:
-                t = threading.Thread(target=self._mapper_worker, args=(line,))
-                t.start()
-                mapper_threads.append(t)
+                mapper_thread = threading.Thread(target=self._mapper_worker, args=(line,))
+                mapper_thread.start()
+                mapper_threads.append(mapper_thread)
 
             # Waits for mappers to complete
-            for t in mapper_threads:
-                t.join()
+            for thread in mapper_threads:
+                thread.join()
 
     def _mapper_worker(self, line):
         """
@@ -64,16 +90,14 @@ class MapReduceJob:
             Parameters:
             line(str) - A line from the input data file
         """
-        key_value_pairs = mapper(line)
+        key_value_pairs = mapper(line, self.airport_codes)
 
         # Processes each key-value pair emitted by the mapper
-        for pair in key_value_pairs:
-            passenger_id, count = pair.split('\t')
-
+        for passenger_id, count in key_value_pairs:
             # Aggregates the flight counts for each passenger
             if passenger_id not in self.passenger_flight_counts:
                 self.passenger_flight_counts[passenger_id] = []
-            self.passenger_flight_counts[passenger_id].append(int(count))
+            self.passenger_flight_counts[passenger_id].append(count)
 
     def _combine(self):
         """
@@ -83,13 +107,13 @@ class MapReduceJob:
 
         # Creates threads for each passenger
         for passenger_id, counts in self.passenger_flight_counts.items():
-            t = threading.Thread(target=self._combiner_worker, args=(passenger_id, counts))
-            t.start()
-            combiner_threads.append(t)
+            combiner_thread = threading.Thread(target=self._combiner_worker, args=(passenger_id, counts))
+            combiner_thread.start()
+            combiner_threads.append(combiner_thread)
 
         # Waits for combiners to complete
-        for t in combiner_threads:
-            t.join()
+        for thread in combiner_threads:
+            thread.join()
 
     def _combiner_worker(self, passenger_id, counts):
         """
@@ -107,40 +131,36 @@ class MapReduceJob:
         to process each partition, and collects the final output data
         """
         # Partitions the intermediate data among the reducers
-        partitioned_data = partition(self.passenger_flight_counts, self.config['num_reducers'])
+        partitioned_data = {}
+
+        for passenger_id, counts in self.passenger_flight_counts.items():
+            partition = partitioner(passenger_id, self.config['num_reducers'])
+            if partition not in partitioned_data:
+                partitioned_data[partition] = []
+            partitioned_data[partition].append((passenger_id, counts))
 
         reducer_threads = []
 
         # Creates threads for each partition
-        for partition_id, partition_data in partitioned_data.items():
-            t = threading.Thread(target=self._reducer_worker, args=(partition_id, partition_data))
-            t.start()
-            reducer_threads.append(t)
+        for partition, data in partitioned_data.items():
+            reducer_thread = threading.Thread(target=self._reducer_worker, args=(data,))
+            reducer_thread.start()
+            reducer_threads.append(reducer_thread)
 
         # Waits for reducers to complete
-        for t in reducer_threads:
-            t.join()
+        for thread in reducer_threads:
+            thread.join()
 
-    def _reducer_worker(self, partition_id, partition_data):
+    def _reducer_worker(self, partition_data):
         """
-        This method processes a single partition of passenger_flight_counts, applies reducer function,
-        then collects the final output data
+        This method applies the reducer function to compute total flight count for each passenger
+        in a partition and collects the final output
 
-        Parameters:
-            partition_id:
-                int: The partition ID
-            partition_data:
-                dict: A dictionary of key-value pairs belonging to the partition
-        """
-        for passenger_id, counts in partition_data.items():
-            # Checks if counts is already a single value or a list
-            if isinstance(counts, int):
-                total_flights = counts
-            else:
-                # Computes total flight counts
-                total_flights = reducer(counts)
-
-            # Appends passenger IDs + total flight count to output data
+            Parameters:
+            partition_data (list) - A list of (passenger_id, counts) tuples for a partition.
+        """        
+        for passenger_id, counts in partition_data:
+            total_flights = reducer(passenger_id, counts)
             self.output_data.append(f"{passenger_id}\t{total_flights}")
 
     def _write_output(self):
