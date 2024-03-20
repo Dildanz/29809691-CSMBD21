@@ -1,3 +1,4 @@
 input_file: data/passenger_main.csv
+airport_file: data/airport_latlong.csv
 output_file: output/passenger_flights.txt
 num_reducers: 4
